@@ -2,6 +2,8 @@
 
 Task tracker is a project used to track and manage your tasks.
 
+Project URL: https://roadmap.sh/projects/task-tracker
+
 ## Development [Nix]
 This project needs [Zig](https://ziglang.org/) 13.0.0
 ```bash
