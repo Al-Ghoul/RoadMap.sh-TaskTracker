@@ -40,6 +40,13 @@ fn ProcessCMD(processArgs: [][:0]u8, fileHandle: ?fs.File, path: []const u8, all
         }
         const subCmd = processArgs[2];
         try Task.AddNewTask(fileHandle.?, subCmd, path, allocator);
+    } else if (std.mem.eql(u8, cmd, "delete")) {
+        if (processArgs.len < 3) {
+            try stdout.print("Error: missing an id.\n", .{});
+            return;
+        }
+        const taskId = processArgs[2];
+        try Task.DeleteTask(fileHandle.?, try std.fmt.parseInt(usize, taskId, 10), path, allocator);
     }
 }
 
@@ -116,5 +123,34 @@ const Task = struct {
             return;
         };
         try stdout.print("Task added successfully (ID: {d}).\n", .{newTask.id});
+    }
+
+    pub fn DeleteTask(file: fs.File, id: usize, path: []const u8, allocator: std.mem.Allocator) !void {
+        const readData = file.readToEndAlloc(allocator, 2048) catch |err| {
+            try stdout.print("Error Reading file: {any}\n", .{err});
+            return;
+        };
+        defer allocator.free(readData);
+
+        var jsonData = try json.parseFromSlice([]Task, allocator, readData, .{});
+        defer jsonData.deinit();
+
+        var newTasks: []Task = try allocator.alloc(Task, jsonData.value.len - 1);
+        defer allocator.free(newTasks);
+
+        var i: usize = 0;
+        for (jsonData.value) |task| {
+            if (id == task.id) continue;
+            newTasks[i] = task;
+            i += 1;
+        }
+
+        var file_out = try fs.cwd().createFile(path, .{});
+        defer file_out.close();
+
+        json.stringify(newTasks, .{}, file_out.writer()) catch |err| {
+            try stdout.print("Error stringifying json: {any}\n", .{err});
+            return;
+        };
     }
 };
