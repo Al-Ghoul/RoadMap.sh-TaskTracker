@@ -2,3 +2,4 @@
 .devenv/
 .zig-cache/
 zig-out/
+tasks.json
