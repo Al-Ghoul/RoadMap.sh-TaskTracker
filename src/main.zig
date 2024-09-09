@@ -53,3 +53,10 @@ fn PrintHelpMessageAndExit() !void {
     std.process.exit(0);
 }
 
+const Task = struct {
+    id: usize,
+    description: []const u8,
+    status: []const u8,
+    createdAt: []const u8,
+    updatedAt: []const u8,
+};
