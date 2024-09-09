@@ -1,5 +1,6 @@
 const std = @import("std");
 const fs = std.fs;
+const json = std.json;
 const stdout = std.io.getStdOut().writer();
 
 pub fn main() !void {
@@ -29,12 +30,16 @@ pub fn main() !void {
 }
 
 fn ProcessCMD(processArgs: [][:0]u8, fileHandle: ?fs.File, path: []const u8, allocator: std.mem.Allocator) !void {
-    _ = fileHandle;
-    _ = path;
-    _ = allocator;
     const cmd = processArgs[1];
     if (std.mem.eql(u8, cmd, "help")) {
         try PrintHelpMessageAndExit();
+    } else if (std.mem.eql(u8, cmd, "add")) {
+        if (processArgs.len < 3) {
+            try stdout.print("Error: missing a description.\n", .{});
+            return;
+        }
+        const subCmd = processArgs[2];
+        try Task.AddNewTask(fileHandle.?, subCmd, path, allocator);
     }
 }
 
@@ -59,4 +64,57 @@ const Task = struct {
     status: []const u8,
     createdAt: []const u8,
     updatedAt: []const u8,
+
+    pub fn AddNewTask(file: fs.File, taskDescription: []const u8, path: []const u8, allocator: std.mem.Allocator) !void {
+        const readData = file.readToEndAlloc(allocator, 2048) catch |err| {
+            try stdout.print("Error Reading file: {any}\n", .{err});
+            return;
+        };
+        defer allocator.free(readData);
+
+        var file_out = try fs.cwd().createFile(path, .{});
+        defer file_out.close();
+
+        if (readData.len == 0) {
+            const newTask = Task{
+                .id = 1,
+                .description = taskDescription,
+                .status = "todo",
+                .createdAt = "2024-09-05T14:30:00",
+                .updatedAt = "2024-09-06T09:00:00",
+            };
+            const newTasks = [_]Task{newTask};
+
+            json.stringify(newTasks, .{}, file_out.writer()) catch |err| {
+                try stdout.print("Error stringifying json: {any}\n", .{err});
+                return;
+            };
+            try stdout.print("Task added successfully (ID: 1).\n", .{});
+            return;
+        }
+
+        var jsonData = try json.parseFromSlice([]Task, allocator, readData, .{});
+        defer jsonData.deinit();
+
+        const newTask = Task{
+            .id = jsonData.value[jsonData.value.len - 1].id + 1,
+            .description = taskDescription,
+            .status = "todo",
+            .createdAt = "2024-09-05T14:30:00",
+            .updatedAt = "2024-09-06T09:00:00",
+        };
+        var newTasks: []Task = try allocator.alloc(Task, jsonData.value.len + 1);
+        defer allocator.free(newTasks);
+
+        for (jsonData.value, 0..) |task, i| {
+            newTasks[i] = task;
+        }
+        newTasks[newTasks.len - 1] = newTask;
+
+        json.stringify(newTasks, .{}, file_out.writer()) catch |err| {
+            try stdout.print("Error stringifying json: {any}\n", .{err});
+            return;
+        };
+        try stdout.print("Task added successfully (ID: {d}).\n", .{newTask.id});
+    }
 };
