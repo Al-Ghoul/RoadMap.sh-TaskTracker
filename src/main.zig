@@ -1,4 +1,5 @@
 const std = @import("std");
+const fs = std.fs;
 const stdout = std.io.getStdOut().writer();
 
 pub fn main() !void {
@@ -13,6 +14,16 @@ pub fn main() !void {
         try PrintHelpMessageAndExit();
         return;
     }
+
+    const cwd = try std.process.getCwdAlloc(allocator);
+    defer allocator.free(cwd);
+
+    const fileName = "tasks.json";
+    var pathBuffer: [1024]u8 = undefined;
+    const path = try std.fmt.bufPrint(&pathBuffer, "{s}/{s}", .{ cwd, fileName });
+
+    const file = fs.openFileAbsolute(path, .{ .mode = fs.File.OpenMode.read_write }) catch try fs.createFileAbsolute(path, .{ .read = true });
+    defer file.close();
 
 }
 
