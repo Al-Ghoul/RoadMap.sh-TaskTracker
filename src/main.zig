@@ -25,8 +25,17 @@ pub fn main() !void {
     const file = fs.openFileAbsolute(path, .{ .mode = fs.File.OpenMode.read_write }) catch try fs.createFileAbsolute(path, .{ .read = true });
     defer file.close();
 
+    try ProcessCMD(args, file, path, allocator);
 }
 
+fn ProcessCMD(processArgs: [][:0]u8, fileHandle: ?fs.File, path: []const u8, allocator: std.mem.Allocator) !void {
+    _ = fileHandle;
+    _ = path;
+    _ = allocator;
+    const cmd = processArgs[1];
+    if (std.mem.eql(u8, cmd, "help")) {
+        try PrintHelpMessageAndExit();
+    }
 }
 
 fn PrintHelpMessageAndExit() !void {
