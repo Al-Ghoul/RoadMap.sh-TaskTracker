@@ -51,6 +51,28 @@ fn ProcessCMD(processArgs: [][:0]u8, fileHandle: ?fs.File, path: []const u8, all
         var subCmd: ?[]const u8 = null;
         if (processArgs.len > 2) subCmd = processArgs[2];
         try Task.ListTasks(fileHandle.?, subCmd, allocator);
+    } else if (std.mem.eql(u8, cmd, "update")) {
+        if (processArgs.len < 4) {
+            try stdout.print("Error: missing an id or description.\n", .{});
+            return;
+        }
+        const taskId = processArgs[2];
+        const newDescription = processArgs[3];
+        try Task.UpdateTaskAccordingly(fileHandle.?, try std.fmt.parseInt(usize, taskId, 10), "update", newDescription, path, allocator);
+    } else if (std.mem.eql(u8, cmd, "mark-in-progress")) {
+        if (processArgs.len < 3) {
+            try stdout.print("Error: missing an id.\n", .{});
+            return;
+        }
+        const taskId = processArgs[2];
+        try Task.UpdateTaskAccordingly(fileHandle.?, try std.fmt.parseInt(usize, taskId, 10), "mark-in-progress", null, path, allocator);
+    } else if (std.mem.eql(u8, cmd, "mark-done")) {
+        if (processArgs.len < 3) {
+            try stdout.print("Error: missing an id.\n", .{});
+            return;
+        }
+        const taskId = processArgs[2];
+        try Task.UpdateTaskAccordingly(fileHandle.?, try std.fmt.parseInt(usize, taskId, 10), "mark-done", null, path, allocator);
     }
 }
 
@@ -160,6 +182,42 @@ const Task = struct {
             }
         }
     }
+
+    pub fn UpdateTaskAccordingly(file: fs.File, id: usize, subCmd: ?[]const u8, taskDescription: ?[]const u8, path: []const u8, allocator: std.mem.Allocator) !void {
+        if (subCmd == null and taskDescription == null) {
+            try stdout.print("Error: missing a description.\n", .{});
+            return;
+        }
+        const readData = file.readToEndAlloc(allocator, 2048) catch |err| {
+            try stdout.print("Error Reading file: {any}\n", .{err});
+            return;
+        };
+        defer allocator.free(readData);
+
+        var jsonData = try json.parseFromSlice([]Task, allocator, readData, .{});
+        defer jsonData.deinit();
+
+        for (jsonData.value, 0..) |task, idx| {
+            if (id == task.id) {
+                if (taskDescription != null and std.mem.eql(u8, subCmd.?, "update")) {
+                    jsonData.value[idx].description = taskDescription.?;
+                }
+                if (std.mem.eql(u8, subCmd.?, "mark-in-progress")) {
+                    jsonData.value[idx].status = "in-progress";
+                } else if (std.mem.eql(u8, subCmd.?, "mark-done")) {
+                    jsonData.value[idx].status = "done";
+                }
+            }
+        }
+        var file_out = try fs.cwd().createFile(path, .{});
+        defer file_out.close();
+
+        json.stringify(jsonData.value, .{}, file_out.writer()) catch |err| {
+            try stdout.print("Error stringifying json: {any}\n", .{err});
+            return;
+        };
+    }
+
     pub fn DeleteTask(file: fs.File, id: usize, path: []const u8, allocator: std.mem.Allocator) !void {
         const readData = file.readToEndAlloc(allocator, 2048) catch |err| {
             try stdout.print("Error Reading file: {any}\n", .{err});
