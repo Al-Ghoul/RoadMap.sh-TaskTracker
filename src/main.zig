@@ -47,6 +47,10 @@ fn ProcessCMD(processArgs: [][:0]u8, fileHandle: ?fs.File, path: []const u8, all
         }
         const taskId = processArgs[2];
         try Task.DeleteTask(fileHandle.?, try std.fmt.parseInt(usize, taskId, 10), path, allocator);
+    } else if (std.mem.eql(u8, cmd, "list")) {
+        var subCmd: ?[]const u8 = null;
+        if (processArgs.len > 2) subCmd = processArgs[2];
+        try Task.ListTasks(fileHandle.?, subCmd, allocator);
     }
 }
 
@@ -125,6 +129,37 @@ const Task = struct {
         try stdout.print("Task added successfully (ID: {d}).\n", .{newTask.id});
     }
 
+    pub fn ListTasks(file: fs.File, status: ?[]const u8, allocator: std.mem.Allocator) !void {
+        const readData = file.readToEndAlloc(allocator, 2048) catch |err| {
+            try stdout.print("Error Reading file: {any}\n", .{err});
+            return;
+        };
+        defer allocator.free(readData);
+
+        if (readData.len == 0) {
+            try stdout.print("No tasks found.\n", .{});
+            return;
+        }
+
+        var jsonData = try json.parseFromSlice([]Task, allocator, readData, .{});
+        defer jsonData.deinit();
+
+        for (jsonData.value) |task| {
+            if (status != null and std.mem.eql(u8, task.status, status.?)) {
+                try stdout.print("ID: {d}\n", .{task.id});
+                try stdout.print("Description: {s}\n", .{task.description});
+                try stdout.print("Status: {s}\n", .{task.status});
+                try stdout.print("Created At: {s}\n", .{task.createdAt});
+                try stdout.print("Updated At: {s}\n", .{task.updatedAt});
+            } else if (status == null) {
+                try stdout.print("ID: {d}\n", .{task.id});
+                try stdout.print("Description: {s}\n", .{task.description});
+                try stdout.print("Status: {s}\n", .{task.status});
+                try stdout.print("Created At: {s}\n", .{task.createdAt});
+                try stdout.print("Updated At: {s}\n", .{task.updatedAt});
+            }
+        }
+    }
     pub fn DeleteTask(file: fs.File, id: usize, path: []const u8, allocator: std.mem.Allocator) !void {
         const readData = file.readToEndAlloc(allocator, 2048) catch |err| {
             try stdout.print("Error Reading file: {any}\n", .{err});
